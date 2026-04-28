@@ -26,7 +26,7 @@ from tools.check_new_videos import fetch_recent_videos  # noqa: E402
 from tools.get_transcript import get_transcript  # noqa: E402
 from tools.send_to_telegram import send_message  # noqa: E402
 from tools.state import load_state, save_state  # noqa: E402
-from tools.summarize_with_gemini import summarize  # noqa: E402
+from tools.summarize_with_gemini import summarize, summarize_from_video_url  # noqa: E402
 
 REQUIRED_ENV = ("GEMINI_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID")
 
@@ -103,20 +103,34 @@ def process_channel(channel: dict, state: dict) -> int:
             print(f"    자막 추출 예외: {e}")
             transcript = None
 
+        summary = None
         try:
             if transcript:
                 summary = summarize(transcript, v["title"], name)
-                msg = format_message(name, v, summary)
             else:
-                msg = format_no_transcript(name, v)
+                # 자막 추출 실패(자막 없음 or 클라우드 IP 차단 등) → Gemini가 URL 직접 분석
+                print("    자막 없음 → Gemini로 영상 직접 분석 시도", flush=True)
+                try:
+                    summary = summarize_from_video_url(v["url"], v["title"], name)
+                    print("    영상 직접 분석 성공", flush=True)
+                except Exception as e2:
+                    print(f"    영상 직접 분석도 실패: {type(e2).__name__}: {e2}")
+                    # 두 경로 모두 실패 → 알림만 발송
+                    summary = None
+        except Exception as e:
+            print(f"    자막 기반 요약 실패: {type(e).__name__}: {e}")
+            summary = None
+
+        try:
+            msg = format_message(name, v, summary) if summary else format_no_transcript(name, v)
             send_message(msg)
             sent += 1
             # 한 영상 성공할 때마다 state 갱신 (중간에 죽어도 진행 상황 보존)
             state[cid] = {"last_video_id": v["video_id"], "last_published": v["published"]}
         except Exception as e:
-            print(f"    요약/발송 실패: {e}")
+            print(f"    텔레그램 발송 실패: {e}")
             traceback.print_exc()
-            # 다음 영상은 시도. state는 갱신 안 함 → 다음 실행에 재시도
+            # state는 갱신 안 함 → 다음 실행에 재시도
             continue
 
     return sent
