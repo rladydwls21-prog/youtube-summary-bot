@@ -37,18 +37,20 @@ def load_channels() -> list[dict]:
 
 def format_message(channel_name: str, video: dict, summary: str) -> str:
     return (
-        f"📺 [{channel_name}] {video['title']}\n"
-        f"🔗 {video['url']}\n\n"
-        f"{summary}"
+        f"[채널명]: {channel_name}\n"
+        f"[제목]: {video['title']}\n\n"
+        f"{summary}\n\n"
+        f"🔗 영상 링크: {video['url']}"
     )
 
 
 def format_no_transcript(channel_name: str, video: dict) -> str:
     return (
-        f"📺 [{channel_name}] {video['title']}\n"
-        f"🔗 {video['url']}\n\n"
-        "⚠️ 이 영상은 자막을 가져올 수 없어 요약을 생성하지 못했습니다.\n"
-        "(자막 비활성화/지역 제한/실시간 송출 직후 등)"
+        f"[채널명]: {channel_name}\n"
+        f"[제목]: {video['title']}\n\n"
+        "⚠️ 자막을 가져올 수 없어 요약 생성 실패\n"
+        "(자막 비활성/지역 제한/실시간 송출 직후 가능성)\n\n"
+        f"🔗 영상 링크: {video['url']}"
     )
 
 
