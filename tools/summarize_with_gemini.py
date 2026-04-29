@@ -134,12 +134,14 @@ def summarize_from_video_url(
     video_url: str,
     title: str,
     channel_name: str,
-    model: str = "gemini-2.5-flash",
+    models: tuple[str, ...] = ("gemini-2.5-flash", "gemini-2.5-pro"),
 ) -> str:
     """YouTube URL을 Gemini에 직접 넘겨 영상 분석으로 요약. (2차 fallback)
 
     자막이 추출 안 될 때(예: GitHub Actions IP 차단)도 작동.
     Gemini가 영상의 음성·시각·자막을 통합 분석.
+
+    flash가 실패(빈 응답·예외)하면 pro로 자동 재시도. flash 성공 시 pro는 호출 안 됨.
     """
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
@@ -150,15 +152,24 @@ def summarize_from_video_url(
         title=title,
         channel_name=channel_name,
     )
-
     contents = types.Content(
         parts=[
             types.Part(file_data=types.FileData(file_uri=video_url)),
             types.Part(text=prompt),
         ]
     )
-    resp = client.models.generate_content(model=model, contents=contents)
-    text = (resp.text or "").strip()
-    if not text:
-        raise RuntimeError("Gemini 영상 분석 응답이 비었습니다.")
-    return text
+
+    last_err: Exception | None = None
+    for model in models:
+        try:
+            resp = client.models.generate_content(model=model, contents=contents)
+            text = (resp.text or "").strip()
+            if text:
+                return text
+            last_err = RuntimeError(f"Gemini {model} 응답이 비었습니다.")
+            print(f"      [경고] {model} 빈 응답 → 다음 모델 시도", flush=True)
+        except Exception as e:
+            last_err = e
+            print(f"      [경고] {model} 실패({type(e).__name__}) → 다음 모델 시도", flush=True)
+
+    raise last_err or RuntimeError("모든 모델 시도 실패")
