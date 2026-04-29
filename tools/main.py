@@ -28,7 +28,7 @@ from tools.send_to_telegram import send_message  # noqa: E402
 from tools.state import load_state, save_state  # noqa: E402
 from tools.summarize_with_gemini import summarize, summarize_from_video_url  # noqa: E402
 
-REQUIRED_ENV = ("GEMINI_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID")
+REQUIRED_ENV = ("GEMINI_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "YOUTUBE_API_KEY")
 
 
 def load_channels() -> list[dict]:

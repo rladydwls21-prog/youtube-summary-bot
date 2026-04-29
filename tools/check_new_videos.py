@@ -1,40 +1,58 @@
 """
-YouTube 채널 RSS 피드에서 최근 업로드 영상 목록 조회.
-API key 없이 동작. RSS는 보통 채널의 최근 15개 영상을 노출.
-"""
-import xml.etree.ElementTree as ET
-from urllib import request
+YouTube Data API v3로 채널 최근 업로드 영상 조회.
 
-UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-NS = {
-    "atom": "http://www.w3.org/2005/Atom",
-    "yt": "http://www.youtube.com/xml/schemas/2015",
-}
+이전엔 무료 RSS 피드(/feeds/videos.xml)를 썼지만 2026-04-29경부터 글로벌하게
+404를 반환하기 시작해 공식 API로 전환. playlistItems.list 호출당 1 unit, 일일
+무료 할당량 10,000 unit이라 채널 수십 개를 매시간 돌려도 여유 있음.
+"""
+import json
+import os
+from urllib import error, parse, request
+
+API_BASE = "https://www.googleapis.com/youtube/v3"
+
+
+def _uploads_playlist_id(channel_id: str) -> str:
+    # YouTube 규약: 채널 ID 'UCxxx'의 업로드 재생목록은 항상 'UUxxx'.
+    if not channel_id.startswith("UC"):
+        raise ValueError(f"예상 못 한 channel_id 형식: {channel_id}")
+    return "UU" + channel_id[2:]
 
 
 def fetch_recent_videos(channel_id: str, limit: int = 15) -> list[dict]:
-    """RSS에서 최근 영상 목록(최신순). 항목: video_id, title, published, url."""
-    url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
-    req = request.Request(url, headers={"User-Agent": UA})
-    with request.urlopen(req, timeout=20) as r:
-        xml_text = r.read().decode("utf-8", errors="replace")
+    """채널 최근 업로드(최신순). 항목: video_id, title, published, url."""
+    api_key = os.environ.get("YOUTUBE_API_KEY")
+    if not api_key:
+        raise RuntimeError("YOUTUBE_API_KEY 환경변수가 없습니다")
 
-    root = ET.fromstring(xml_text)
+    params = {
+        "part": "snippet,contentDetails",
+        "playlistId": _uploads_playlist_id(channel_id),
+        "maxResults": str(min(limit, 50)),
+        "key": api_key,
+    }
+    url = f"{API_BASE}/playlistItems?{parse.urlencode(params)}"
+
+    try:
+        with request.urlopen(url, timeout=20) as r:
+            data = json.loads(r.read().decode("utf-8"))
+    except error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"YouTube API HTTP {e.code}: {body[:300]}") from e
+
     videos = []
-    for entry in root.findall("atom:entry", NS):
-        vid_el = entry.find("yt:videoId", NS)
-        if vid_el is None or not vid_el.text:
+    for item in data.get("items", []):
+        snippet = item.get("snippet", {})
+        content = item.get("contentDetails", {})
+        video_id = content.get("videoId") or snippet.get("resourceId", {}).get("videoId")
+        if not video_id:
             continue
-        title_el = entry.find("atom:title", NS)
-        published_el = entry.find("atom:published", NS)
         videos.append(
             {
-                "video_id": vid_el.text,
-                "title": (title_el.text or "(제목 없음)") if title_el is not None else "(제목 없음)",
-                "published": (published_el.text or "") if published_el is not None else "",
-                "url": f"https://www.youtube.com/watch?v={vid_el.text}",
+                "video_id": video_id,
+                "title": snippet.get("title", "(제목 없음)"),
+                "published": content.get("videoPublishedAt") or snippet.get("publishedAt", ""),
+                "url": f"https://www.youtube.com/watch?v={video_id}",
             }
         )
-        if len(videos) >= limit:
-            break
     return videos
