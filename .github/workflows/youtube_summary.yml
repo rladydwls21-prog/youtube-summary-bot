@@ -2,8 +2,9 @@ name: YouTube Summary Bot
 
 on:
   schedule:
-    # 매시 7분 (UTC). GitHub Actions cron은 정시에 몰리면 지연되므로 비정시 권장.
-    - cron: "7 * * * *"
+    # 매시 :07분 + :37분 (UTC). 30분 간격 이중 트리거 — 한쪽이 GitHub 측에서
+    # 스킵돼도 다른 쪽이 잡아주는 안전망. 비정시 분(:07, :37)으로 큐 혼잡 회피.
+    - cron: "7,37 * * * *"
   workflow_dispatch: {}
 
 jobs:
