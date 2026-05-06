@@ -5,8 +5,10 @@ YouTube Data API v3로 채널 최근 업로드 영상 조회.
 404를 반환하기 시작해 공식 API로 전환. playlistItems.list 호출당 1 unit, 일일
 무료 할당량 10,000 unit이라 채널 수십 개를 매시간 돌려도 여유 있음.
 """
+import http.client
 import json
 import os
+import socket
 from urllib import error, parse, request
 
 API_BASE = "https://www.googleapis.com/youtube/v3"
@@ -56,3 +58,29 @@ def fetch_recent_videos(channel_id: str, limit: int = 15) -> list[dict]:
             }
         )
     return videos
+
+
+def is_short(video_id: str, timeout: int = 10) -> bool:
+    """
+    YouTube Shorts 판별.
+
+    /shorts/<id> 에 HEAD 요청 → 200이면 Shorts, 3xx 리다이렉트(=> /watch)면 일반 영상.
+    이 동작은 YouTube가 수년간 일관되게 유지해온 패턴.
+
+    네트워크 오류·예외 시에는 False(=일반 영상)로 처리해 요약 누락을 방지.
+    잘못 판별해서 쇼츠 1개가 새어 나가는 게, 일반 영상을 통째로 건너뛰는 것보다 안전.
+    """
+    try:
+        conn = http.client.HTTPSConnection("www.youtube.com", timeout=timeout)
+        try:
+            conn.request(
+                "HEAD",
+                f"/shorts/{video_id}",
+                headers={"User-Agent": "Mozilla/5.0"},
+            )
+            resp = conn.getresponse()
+            return resp.status == 200
+        finally:
+            conn.close()
+    except (socket.timeout, OSError, http.client.HTTPException):
+        return False

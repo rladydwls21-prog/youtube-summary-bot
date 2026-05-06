@@ -22,7 +22,7 @@ from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(ROOT / ".env")
 
-from tools.check_new_videos import fetch_recent_videos  # noqa: E402
+from tools.check_new_videos import fetch_recent_videos, is_short  # noqa: E402
 from tools.get_transcript import get_transcript  # noqa: E402
 from tools.send_to_telegram import send_message  # noqa: E402
 from tools.state import load_state, save_state  # noqa: E402
@@ -96,6 +96,12 @@ def process_channel(channel: dict, state: dict) -> int:
 
     sent = 0
     for v in new_videos:
+        # 쇼츠는 요약 대상에서 제외. state는 갱신해서 다음 실행에 다시 검사 안 함.
+        if is_short(v["video_id"]):
+            print(f"  → 건너뜀(쇼츠): {v['title'][:60]}", flush=True)
+            state[cid] = {"last_video_id": v["video_id"], "last_published": v["published"]}
+            continue
+
         print(f"  → 처리: {v['title'][:60]}", flush=True)
         try:
             transcript = get_transcript(v["video_id"])
