@@ -20,7 +20,7 @@ GitHub Actions가 **매시 7분(UTC)**에 자동 실행. 한국 시간 기준으
    3. **이전 마지막 영상 이후의 새 영상**만 추려, 오래된 순으로 처리:
       1. **쇼츠 판별** (`tools/check_new_videos.py::is_short`) — `youtube.com/shorts/<id>` HEAD 요청 결과 200이면 쇼츠로 간주, 요약 없이 건너뛰고 state만 갱신해 다음 실행에 재검사 안 함. 사장님이 쇼츠는 안 보기로 결정(2026-05-07).
       2. **자막 추출** (`tools/get_transcript.py`) — 한국어 자막 우선, 없으면 영어, 그것도 없으면 자동 생성 자막.
-      3. **요약 생성** (`tools/summarize_with_gemini.py`) — Gemini-2.5-flash, "한줄요약 + 번호 매긴 핵심정리" 포맷.
+      3. **요약 생성** (`tools/summarize_with_gemini.py`) — Gemini-2.5-flash, "한줄요약 + 번호 매긴 핵심정리" 포맷. 자막 없을 때는 `summarize_from_video_url`이 영상 URL을 Gemini에 직접 넘겨 음성·시각 통합 분석. 풀버전(1-2시간+) 영상이 1M 토큰 한도를 넘는 사고를 막기 위해 `fps=0.2`(5초당 1프레임) + `media_resolution=LOW` 설정으로 프레임 토큰을 약 1/20 수준으로 압축. 토론·talking-head 형식이라 시각 손실은 무관.
       4. **텔레그램 발송** (`tools/send_to_telegram.py`) — 4096자 넘으면 자동 분할.
       5. **state 갱신** — 발송 성공 시점에 즉시 갱신(중간에 죽어도 진행 상황 보존).
    4. 자막을 못 가져온 영상은 "자막 없음" 알림만 발송, 사장님이 직접 보러 갈 수 있게 링크 첨부.

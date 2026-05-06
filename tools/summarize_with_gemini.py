@@ -141,6 +141,12 @@ def summarize_from_video_url(
     자막이 추출 안 될 때(예: GitHub Actions IP 차단)도 작동.
     Gemini가 영상의 음성·시각·자막을 통합 분석.
 
+    풀버전(1-2시간+) 영상이 1M 입력 토큰 한도를 넘어 INVALID_ARGUMENT로 죽는 사고
+    방지를 위해, 영상 프레임 토큰을 다음 두 축으로 줄임:
+      - fps=0.2          → 5초당 1프레임 (기본 1fps의 1/5)
+      - media_resolution → LOW (프레임당 토큰 약 1/4)
+    talking-head 토론 영상에서 음성이 정보의 거의 전부라 시각 손실은 무시 가능.
+
     flash가 실패(빈 응답·예외)하면 pro로 자동 재시도. flash 성공 시 pro는 호출 안 됨.
     """
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -154,15 +160,25 @@ def summarize_from_video_url(
     )
     contents = types.Content(
         parts=[
-            types.Part(file_data=types.FileData(file_uri=video_url)),
+            types.Part(
+                file_data=types.FileData(file_uri=video_url),
+                video_metadata=types.VideoMetadata(fps=0.2),
+            ),
             types.Part(text=prompt),
         ]
+    )
+    config = types.GenerateContentConfig(
+        media_resolution=types.MediaResolution.MEDIA_RESOLUTION_LOW,
     )
 
     last_err: Exception | None = None
     for model in models:
         try:
-            resp = client.models.generate_content(model=model, contents=contents)
+            resp = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=config,
+            )
             text = (resp.text or "").strip()
             if text:
                 return text
